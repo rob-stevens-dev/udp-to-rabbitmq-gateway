@@ -1,0 +1,204 @@
+# .gitignore for UDP-to-RabbitMQ Gateway Project
+
+### C++ Ignores ###
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+### CMake Ignores ###
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+**/build/
+build*/
+cmake-build-*/
+
+### IDE Ignores ###
+# Visual Studio Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# Visual Studio
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.userosscache
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+ipch/
+
+# CLion
+.idea/
+*.iml
+*.iws
+*.ipr
+.idea_modules/
+out/
+
+# Eclipse
+.metadata
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.settings/
+.loadpath
+.recommenders
+.classpath
+.project
+.cproject
+
+### Project-specific Ignores ###
+# Dependency directories
+thirdparty/downloads/
+vcpkg_installed/
+
+# Generated files
+components/*/generated/
+
+# Debug files
+*.log
+logs/
+*.trace
+gmon.out
+core.*
+
+# Credentials and config files
+*.key
+*.pem
+*.env
+config.local.json
+credentials.json
+secrets/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Local test directories
+local-test/
+test-results/
+
+# Documentation build
+docs/_build/
+docs/html/
+docs/xml/
+
+# Temporary directories
+temp/
+tmp/
+
+# Profile data
+profiling/
+*.prof
+
+# Coverage reports
+coverage/
+*.gcov
+*.gcda
+*.gcno
+coverage.xml
+coverage.info
+htmlcov/
+
+# Protocol buffer generated files
+*.pb.h
+*.pb.cc
+
+# System files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.directory
+
+# Package directories
+deb_packages/
+rpm_packages/
+packages/
+
+# Docker related
+.dockerignore
+docker-compose.override.yml
+
+# CI/CD artifacts
+.gitlab-ci-local/
+.github/workflow-artifacts/
+
+# Redis dump files
+*.rdb
+dump.rdb
+
+# RabbitMQ schema
+schema-defs.json
+
+# Version files that get auto-generated
+version.h
+git_version.h
+
+# Dependency lock files
+Pipfile.lock
+package-lock.json
+
+# Debug tools output
+components/debug-tools/captures/
+components/debug-tools/reports/
+
+# Monitoring dumps
+monitoring_dumps/
+
+# Test packet files
+test_packets/
+
+# GeoIP database files (usually large)
+*.mmdb
