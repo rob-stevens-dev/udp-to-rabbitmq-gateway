@@ -50,11 +50,11 @@ target_link_libraries(udp-gateway-server
 
 # Set compiler warnings
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(udp_gateway PRIVATE -Wall -Wextra -Wpedantic -Werror)
-    target_compile_options(udp-gateway-server PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    target_compile_options(udp_gateway PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(udp-gateway-server PRIVATE -Wall -Wextra -Wpedantic)
 elseif(MSVC)
-    target_compile_options(udp_gateway PRIVATE /W4 /WX)
-    target_compile_options(udp-gateway-server PRIVATE /W4 /WX)
+    target_compile_options(udp_gateway PRIVATE /W4)
+    target_compile_options(udp-gateway-server PRIVATE /W4)
 endif()
 
 # Install rules

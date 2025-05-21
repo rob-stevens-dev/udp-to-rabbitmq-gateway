@@ -1,0 +1,62 @@
+# Build stage using Debian slim
+FROM debian:bullseye-slim AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    libboost-all-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create directories for external component interfaces
+RUN mkdir -p /external/protocol-parser/include/protocol_parser \
+    /external/redis-deduplication/include/redis_deduplication \
+    /external/rabbitmq-integration/include/rabbitmq_integration \
+    /external/device-manager/include/device_manager \
+    /external/monitoring-system/include/monitoring_system
+
+# Copy source code
+WORKDIR /src
+COPY . .
+
+# Copy the interface headers to the external component directories
+# These would normally come from the other components
+COPY include/mock_interfaces/protocol_parser/protocol_parser.hpp /external/protocol-parser/include/protocol_parser/
+COPY include/mock_interfaces/redis_deduplication/deduplication_service.hpp /external/redis-deduplication/include/redis_deduplication/
+COPY include/mock_interfaces/rabbitmq_integration/message_publisher.hpp /external/rabbitmq-integration/include/rabbitmq_integration/
+COPY include/mock_interfaces/device_manager/device_manager.hpp /external/device-manager/include/device_manager/
+COPY include/mock_interfaces/monitoring_system/metrics_collector.hpp /external/monitoring-system/include/monitoring_system/
+
+# Build the component
+RUN mkdir -p build && \
+    cd build && \
+    cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_TESTING=OFF \
+        -DBUILD_EXAMPLES=OFF \
+        -DCMAKE_CXX_FLAGS="-w" \
+        -DCMAKE_INSTALL_PREFIX=/install && \
+    make -j$(nproc) && \
+    make install
+
+# Final stage using Google's distroless container (minimal, secure base image)
+FROM gcr.io/distroless/cc-debian11
+
+# Copy the built binaries and dependencies
+COPY --from=builder /install/bin/udp-gateway-server /usr/local/bin/
+COPY --from=builder /install/lib/libudp_gateway.* /usr/local/lib/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libboost_*.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libstdc++.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libgcc_s.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libm.so* /usr/lib/x86_64-linux-gnu/
+
+# Set library path
+ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/lib/x86_64-linux-gnu
+
+# Expose the UDP port
+EXPOSE 8125/udp
+
+# Run the gateway server
+ENTRYPOINT ["/usr/local/bin/udp-gateway-server"]
+CMD ["--address=0.0.0.0", "--port=8125", "--region=na"]

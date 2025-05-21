@@ -1,6 +1,34 @@
-# .gitignore for UDP-to-RabbitMQ Gateway Project
+# Build directories
+/build/
+/minimal_build/
+/*/build/
+*/*/build/
 
-### C++ Ignores ###
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+*.cmake
+!cmake/*.cmake
+Makefile
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+install_manifest.txt
+
+# Mock interface directories
+/mock_includes/
+/components/*/include/mock_interfaces/
+
+# Temporarily created component directories
+/components/protocol-parser/
+/components/redis-deduplication/
+/components/rabbitmq-integration/
+/components/device-manager/
+/components/monitoring-system/
+
+# Temporary/test files
+/test_minimal.cpp
+
 # Prerequisites
 *.d
 
@@ -33,172 +61,34 @@
 *.exe
 *.out
 *.app
+udp-gateway-server
 
-### CMake Ignores ###
-CMakeLists.txt.user
-CMakeCache.txt
-CMakeFiles/
-CMakeScripts/
-Testing/
-Makefile
-cmake_install.cmake
-install_manifest.txt
-compile_commands.json
-CTestTestfile.cmake
-_deps
-**/build/
-build*/
-cmake-build-*/
+# Testing
+/Testing/
 
-### IDE Ignores ###
-# Visual Studio Code
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-*.code-workspace
-
-# Visual Studio
-.vs/
-*.sln
-*.vcxproj
-*.vcxproj.filters
-*.vcxproj.user
-*.userosscache
-*.sdf
-*.opensdf
-*.VC.db
-*.VC.opendb
-ipch/
-
-# CLion
+# IDE and editor files
+.vscode/
 .idea/
-*.iml
-*.iws
-*.ipr
-.idea_modules/
-out/
-
-# Eclipse
-.metadata
-bin/
-tmp/
-*.tmp
-*.bak
 *.swp
-*~.nib
-local.properties
-.settings/
-.loadpath
-.recommenders
-.classpath
-.project
-.cproject
-
-### Project-specific Ignores ###
-# Dependency directories
-thirdparty/downloads/
-vcpkg_installed/
-
-# Generated files
-components/*/generated/
+*.swo
+*~
+.DS_Store
 
 # Debug files
-*.log
-logs/
-*.trace
-gmon.out
-core.*
+*.dSYM/
+*.su
+*.idb
+*.pdb
 
-# Credentials and config files
-*.key
-*.pem
-*.env
-config.local.json
-credentials.json
-secrets/
-
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-
-# Local test directories
-local-test/
-test-results/
-
-# Documentation build
-docs/_build/
-docs/html/
-docs/xml/
-
-# Temporary directories
-temp/
-tmp/
-
-# Profile data
-profiling/
-*.prof
-
-# Coverage reports
-coverage/
-*.gcov
+# Code coverage
 *.gcda
 *.gcno
-coverage.xml
-coverage.info
-htmlcov/
+*.lcov
+coverage/
 
-# Protocol buffer generated files
-*.pb.h
-*.pb.cc
-
-# System files
-.DS_Store
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
-.directory
-
-# Package directories
-deb_packages/
-rpm_packages/
-packages/
-
-# Docker related
+# Docker temporary files
 .dockerignore
-docker-compose.override.yml
+.docker/
 
-# CI/CD artifacts
-.gitlab-ci-local/
-.github/workflow-artifacts/
-
-# Redis dump files
-*.rdb
-dump.rdb
-
-# RabbitMQ schema
-schema-defs.json
-
-# Version files that get auto-generated
-version.h
-git_version.h
-
-# Dependency lock files
-Pipfile.lock
-package-lock.json
-
-# Debug tools output
-components/debug-tools/captures/
-components/debug-tools/reports/
-
-# Monitoring dumps
-monitoring_dumps/
-
-# Test packet files
-test_packets/
-
-# GeoIP database files (usually large)
-*.mmdb
+# Log files
+*.log

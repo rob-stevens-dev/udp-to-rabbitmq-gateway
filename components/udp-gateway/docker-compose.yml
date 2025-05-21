@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  udp-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: udp-gateway:latest
+    container_name: udp-gateway
+    ports:
+      - "8125:8125/udp"
+    environment:
+      - REGION_CODE=na
+    depends_on:
+      - rabbitmq
+      - redis
+    restart: unless-stopped
+    command:
+      - "--address=0.0.0.0"
+      - "--port=8125"
+      - "--region=na"
+      - "--threads=4"
+      - "--metrics=true"
+      - "--metrics-interval=10"
+      - "--queue-prefix=gateway"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+    networks:
+      - gateway-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "netstat -an | grep 8125 > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  rabbitmq:
+    image: rabbitmq:3.10-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - gateway-network
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - gateway-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # For a complete deployment, you would add the other components here:
+  # protocol-parser:
+  #   image: protocol-parser:latest
+  #   ...
+
+  # redis-deduplication:
+  #   image: redis-deduplication:latest
+  #   ...
+
+  # device-manager:
+  #   image: device-manager:latest
+  #   ...
+
+  # monitoring-system:
+  #   image: monitoring-system:latest
+  #   ...
+
+networks:
+  gateway-network:
+    driver: bridge
+
+volumes:
+  rabbitmq-data:
+  redis-data:
