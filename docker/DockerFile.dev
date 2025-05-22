@@ -1,0 +1,74 @@
+FROM debian:bullseye-slim
+
+# Install development tools and dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    ninja-build \
+    git \
+    gdb \
+    valgrind \
+    pkg-config \
+    libboost-all-dev \
+    libhiredis-dev \
+    librabbitmq-dev \
+    libpq-dev \
+    curl \
+    wget \
+    vim \
+    clang \
+    clang-format \
+    clang-tidy \
+    cppcheck \
+    lcov \
+    ccache \
+    doxygen \
+    graphviz \
+    rsync \
+    netcat \
+    ssh \
+    sudo \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install nlohmann_json
+RUN mkdir -p /usr/include/nlohmann && \
+    curl -L https://github.com/nlohmann/json/releases/download/v3.11.2/json.hpp -o /usr/include/nlohmann/json.hpp
+
+# Create a non-root user
+ARG USERNAME=developer
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+RUN groupadd --gid $USER_GID $USERNAME && \
+    useradd --uid $USER_UID --gid $USER_GID -m $USERNAME && \
+    echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
+    chmod 0440 /etc/sudoers.d/$USERNAME
+
+# Create workspace directory and set ownership
+RUN mkdir -p /workspace && chown $USERNAME:$USERNAME /workspace
+
+# Set up ccache
+ENV PATH="/usr/lib/ccache:${PATH}"
+ENV CCACHE_DIR=/workspace/.ccache
+
+# Switch to the non-root user
+USER $USERNAME
+
+# Set up shell prompt and environment
+RUN echo 'export PS1="\[\e[36m\]\u\[\e[m\]@\[\e[32m\]udp-gateway-dev\[\e[m\]:\[\e[33m\]\w\[\e[m\]$ "' >> ~/.bashrc && \
+    echo 'alias ll="ls -la"' >> ~/.bashrc && \
+    echo 'alias ..="cd .."' >> ~/.bashrc && \
+    echo 'alias ...="cd ../.."' >> ~/.bashrc && \
+    echo 'export PATH=$PATH:/workspace/build/bin' >> ~/.bashrc
+
+# Install vcpkg (optional, if using vcpkg for dependency management)
+RUN git clone https://github.com/microsoft/vcpkg.git ~/vcpkg && \
+    ~/vcpkg/bootstrap-vcpkg.sh && \
+    echo 'export PATH=$PATH:~/vcpkg' >> ~/.bashrc
+
+# Set working directory
+WORKDIR /workspace
+
+# Default command
+CMD ["/bin/bash"]
