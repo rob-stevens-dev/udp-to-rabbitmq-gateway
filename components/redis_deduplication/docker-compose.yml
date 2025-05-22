@@ -1,0 +1,203 @@
+# components/redis-deduplication/docker-compose.yml
+# Development environment for Redis Deduplication component
+
+version: '3.8'
+
+services:
+  # Redis Master
+  redis-master:
+    image: redis:7-alpine
+    container_name: redis-dedup-master
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass "dev-password"
+    volumes:
+      - redis-master-data:/data
+      - ./config/redis-master.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "dev-password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Redis Standby (for failover testing)
+  redis-standby:
+    image: redis:7-alpine
+    container_name: redis-dedup-standby
+    ports:
+      - "6380:6379"
+    command: redis-server --appendonly yes --requirepass "dev-password"
+    volumes:
+      - redis-standby-data:/data
+      - ./config/redis-standby.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "dev-password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Redis Sentinel (for automatic failover)
+  redis-sentinel:
+    image: redis:7-alpine
+    container_name: redis-dedup-sentinel
+    ports:
+      - "26379:26379"
+    command: redis-sentinel /usr/local/etc/redis/sentinel.conf
+    volumes:
+      - ./config/sentinel.conf:/usr/local/etc/redis/sentinel.conf:ro
+    networks:
+      - redis-network
+    depends_on:
+      - redis-master
+      - redis-standby
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # Development container
+  redis-dedup-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: redis-dedup-dev
+    volumes:
+      - .:/workspace
+      - build-cache:/workspace/build
+    working_dir: /workspace
+    networks:
+      - redis-network
+    depends_on:
+      - redis-master
+      - redis-standby
+    environment:
+      - REDIS_MASTER_HOST=redis-master
+      - REDIS_MASTER_PORT=6379
+      - REDIS_STANDBY_HOST=redis-standby
+      - REDIS_STANDBY_PORT=6379
+      - REDIS_PASSWORD=dev-password
+      - CMAKE_BUILD_TYPE=Debug
+      - ENABLE_TESTING=ON
+      - ENABLE_EXAMPLES=ON
+    stdin_open: true
+    tty: true
+
+  # Example application
+  dedup-example:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime-slim
+    container_name: redis-dedup-example
+    networks:
+      - redis-network
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      redis-standby:
+        condition: service_healthy
+    environment:
+      - REDIS_HOST=redis-master
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=dev-password
+    command: ["/usr/local/bin/simple_deduplication", "redis-master", "6379", "dev-password"]
+
+  # Load testing container
+  dedup-loadtest:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime-slim
+    container_name: redis-dedup-loadtest
+    networks:
+      - redis-network
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    environment:
+      - REDIS_HOST=redis-master
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=dev-password
+    profiles:
+      - loadtest
+    command: ["/usr/local/bin/loadtest_tool"]
+
+  # Redis monitoring (RedisInsight)
+  redis-insight:
+    image: redislabs/redisinsight:latest
+    container_name: redis-dedup-insight
+    ports:
+      - "8001:8001"
+    volumes:
+      - redis-insight-data:/db
+    networks:
+      - redis-network
+    profiles:
+      - monitoring
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: redis-dedup-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - redis-network
+    profiles:
+      - monitoring
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+
+  # Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: redis-dedup-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - redis-network
+    profiles:
+      - monitoring
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+
+networks:
+  redis-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  redis-master-data:
+    driver: local
+  redis-standby-data:
+    driver: local
+  redis-insight-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  build-cache:
+    driver: local
