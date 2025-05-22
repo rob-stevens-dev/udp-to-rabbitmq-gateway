@@ -1,5 +1,0 @@
-RateLimiterTest 1 0.113861
-TypesTest 1 0.0033169
-SessionTest 1 0.0036871
-GatewayTest 1 0.0106531
----
