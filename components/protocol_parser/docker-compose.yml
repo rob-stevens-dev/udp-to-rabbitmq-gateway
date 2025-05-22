@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    volumes:
+      - .:/workspace
+      - build_volume:/workspace/build
+    working_dir: /workspace
+    command: sleep infinity
+    environment:
+      - CMAKE_BUILD_TYPE=Debug
+    networks:
+      - udp_gateway_network
+  
+  udp_gateway:
+    depends_on:
+      - redis
+      - rabbitmq
+    build:
+      context: .
+      dockerfile: components/udp_gateway/Dockerfile
+    ports:
+      - "8125:8125/udp"  # For UDP traffic
+      - "8126:8126/tcp"  # For HTTP monitoring
+    environment:
+      - REDIS_HOST=redis
+      - RABBITMQ_HOST=rabbitmq
+    networks:
+      - udp_gateway_network
+    volumes:
+      - ./config:/app/config
+    deploy:
+      replicas: 2
+  
+  redis:
+    image: redis:6-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - udp_gateway_network
+    command: redis-server --appendonly yes
+  
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - udp_gateway_network
+    environment:
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=password
+  
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - udp_gateway_network
+  
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - udp_gateway_network
+    depends_on:
+      - prometheus
+
+networks:
+  udp_gateway_network:
+    driver: bridge
+
+volumes:
+  build_volume:
+  redis_data:
+  rabbitmq_data:
+  prometheus_data:
+  grafana_data:
