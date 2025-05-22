@@ -1,0 +1,120 @@
+{
+  "parser": {
+    "strictMode": false,
+    "validateOnParse": true,
+    "maxMessageSize": 8192,
+    "allowLegacyProtocol": true,
+    "allocStrategy": "HYBRID",
+    "hybridThreshold": 1024
+  },
+  "validator": {
+    "strictMode": false,
+    "validateChecksum": true,
+    "validateRequired": true,
+    "validateRanges": true,
+    "allowUnknownFields": true,
+    "minProtocolVersion": {
+      "major": 1,
+      "minor": 0
+    },
+    "maxProtocolVersion": {
+      "major": 2,
+      "minor": 0
+    }
+  },
+  "commandBuilder": {
+    "defaultProtocolVersion": {
+      "major": 1,
+      "minor": 0
+    },
+    "addChecksum": true,
+    "validateOnBuild": true
+  },
+  "supportedMessageTypes": [
+    {
+      "type": "GPS_UPDATE",
+      "typeId": 1,
+      "fields": [
+        {"name": "latitude", "type": "double", "required": true, "minValue": -90.0, "maxValue": 90.0},
+        {"name": "longitude", "type": "double", "required": true, "minValue": -180.0, "maxValue": 180.0},
+        {"name": "altitude", "type": "double", "required": true, "minValue": -500.0, "maxValue": 10000.0},
+        {"name": "accuracy", "type": "float", "required": false, "minValue": 0.0, "maxValue": 1000.0},
+        {"name": "speed", "type": "float", "required": false, "minValue": 0.0, "maxValue": 1000.0},
+        {"name": "heading", "type": "float", "required": false, "minValue": 0.0, "maxValue": 360.0},
+        {"name": "timestamp", "type": "uint64", "required": false}
+      ]
+    },
+    {
+      "type": "DEVICE_STATUS",
+      "typeId": 2,
+      "fields": [
+        {"name": "batteryLevel", "type": "float", "required": true, "minValue": 0.0, "maxValue": 100.0},
+        {"name": "signalStrength", "type": "uint8", "required": true, "minValue": 0, "maxValue": 5},
+        {"name": "charging", "type": "bool", "required": true},
+        {"name": "freeMemory", "type": "uint32", "required": true},
+        {"name": "uptime", "type": "uint64", "required": false},
+        {"name": "temperature", "type": "uint8", "required": false, "minValue": 0, "maxValue": 150}
+      ]
+    },
+    {
+      "type": "EVENT",
+      "typeId": 3,
+      "fields": [
+        {"name": "eventType", "type": "uint8", "required": true},
+        {"name": "timestamp", "type": "uint32", "required": true},
+        {"name": "eventData", "type": "binary", "required": false}
+      ]
+    },
+    {
+      "type": "CMD_ACK",
+      "typeId": 4,
+      "fields": [
+        {"name": "commandType", "type": "uint8", "required": true},
+        {"name": "originalSequence", "type": "uint32", "required": true},
+        {"name": "status", "type": "uint8", "required": true},
+        {"name": "statusMessage", "type": "string", "required": false}
+      ]
+    }
+  ],
+  "supportedCommandTypes": [
+    {
+      "type": "SUBSCRIBE",
+      "typeId": 129,
+      "parameters": [
+        {"name": "topic", "type": "string", "required": true},
+        {"name": "qos", "type": "uint8", "required": false, "defaultValue": 0}
+      ]
+    },
+    {
+      "type": "UNSUBSCRIBE",
+      "typeId": 130,
+      "parameters": [
+        {"name": "topic", "type": "string", "required": true}
+      ]
+    },
+    {
+      "type": "REBOOT",
+      "typeId": 131,
+      "parameters": [
+        {"name": "delay", "type": "uint16", "required": false, "defaultValue": 0},
+        {"name": "reason", "type": "string", "required": false}
+      ]
+    },
+    {
+      "type": "CONFIG",
+      "typeId": 132,
+      "parameters": [
+        {"name": "configType", "type": "uint8", "required": true},
+        {"name": "configData", "type": "binary", "required": true}
+      ]
+    }
+  ],
+  "protocol": {
+    "magic": [85, 170, 85, 170],
+    "headerSize": 9,
+    "imeiSize": 15,
+    "sequenceSize": 4,
+    "checksumSize": 4,
+    "maxPacketSize": 8192
+  }
+}
