@@ -1,107 +1,132 @@
-cmake_minimum_required(VERSION 3.16)
-project(udp-gateway VERSION 0.1.0 LANGUAGES CXX)
+find_package(GTest REQUIRED)
 
-# Set C++ standard
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+# Try to find GMock, fall back to using GTest's version if available
+find_package(GMock QUIET)
+if(NOT GMock_FOUND)
+    # Some GTest installations include GMock
+    find_library(GMOCK_LIBRARY gmock)
+    find_library(GMOCK_MAIN_LIBRARY gmock_main)
+    if(GMOCK_LIBRARY AND GMOCK_MAIN_LIBRARY)
+        add_library(GMock::GMock UNKNOWN IMPORTED)
+        set_target_properties(GMock::GMock PROPERTIES IMPORTED_LOCATION ${GMOCK_LIBRARY})
+        add_library(GMock::Main UNKNOWN IMPORTED)
+        set_target_properties(GMock::Main PROPERTIES IMPORTED_LOCATION ${GMOCK_MAIN_LIBRARY})
+    endif()
+endif()
 
-# Find dependencies
-find_package(Boost REQUIRED COMPONENTS system program_options)
-find_package(Threads REQUIRED)
-
-# Add library
-add_library(udp_gateway
-    src/gateway.cpp
-    src/session.cpp
-    src/rate_limiter.cpp
+# Include directories for tests
+include_directories(
+    ${CMAKE_SOURCE_DIR}/include
 )
 
-# Set include directories
-target_include_directories(udp_gateway
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
+# Create mock interface headers for testing
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/mock_interfaces.hpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/mock_interfaces.hpp
+    @ONLY
+)
+
+# Unit tests
+add_executable(rate_limiter_test 
+    unit/rate_limiter_test.cpp
+    ${CMAKE_SOURCE_DIR}/src/rate_limiter.cpp
+)
+
+target_link_libraries(rate_limiter_test
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        GTest::GTest
+        GTest::Main
+        Threads::Threads
 )
 
-# Link dependencies
-target_link_libraries(udp_gateway
-    PUBLIC
+target_include_directories(rate_limiter_test
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+# Add gateway types test
+add_executable(types_test
+    unit/types_test.cpp
+)
+
+target_link_libraries(types_test
+    PRIVATE
+        GTest::GTest
+        GTest::Main
+)
+
+target_include_directories(types_test
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+# Session test with mocks
+add_executable(session_test
+    unit/session_test.cpp
+    ${CMAKE_SOURCE_DIR}/src/session.cpp
+    ${CMAKE_SOURCE_DIR}/src/rate_limiter.cpp
+)
+
+target_link_libraries(session_test
+    PRIVATE
+        GTest::GTest
+        GTest::Main
         Boost::system
         Threads::Threads
-    PRIVATE
-        # These would be actual component libraries in the real implementation
-        # protocol-parser
-        # redis-deduplication
-        # rabbitmq-integration
-        # device-manager
-        # monitoring-system
 )
 
-# Add executable
-add_executable(udp-gateway-server src/main.cpp)
-target_link_libraries(udp-gateway-server 
-    PRIVATE 
-        udp_gateway 
-        Boost::program_options
+if(TARGET GMock::GMock)
+    target_link_libraries(session_test PRIVATE GMock::GMock)
+endif()
+
+target_include_directories(session_test
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_BINARY_DIR}
 )
+
+# Gateway test with mocks
+add_executable(gateway_test
+    unit/gateway_test.cpp
+    ${CMAKE_SOURCE_DIR}/src/gateway.cpp
+    ${CMAKE_SOURCE_DIR}/src/session.cpp
+    ${CMAKE_SOURCE_DIR}/src/rate_limiter.cpp
+)
+
+target_link_libraries(gateway_test
+    PRIVATE
+        GTest::GTest
+        GTest::Main
+        Boost::system
+        Threads::Threads
+)
+
+if(TARGET GMock::GMock)
+    target_link_libraries(gateway_test PRIVATE GMock::GMock)
+endif()
+
+target_include_directories(gateway_test
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+# Add the tests to CTest
+add_test(NAME RateLimiterTest COMMAND rate_limiter_test)
+add_test(NAME TypesTest COMMAND types_test)
+add_test(NAME SessionTest COMMAND session_test)
+add_test(NAME GatewayTest COMMAND gateway_test)
 
 # Set compiler warnings
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(udp_gateway PRIVATE -Wall -Wextra -Wpedantic)
-    target_compile_options(udp-gateway-server PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(rate_limiter_test PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(types_test PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(session_test PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(gateway_test PRIVATE -Wall -Wextra -Wpedantic)
 elseif(MSVC)
-    target_compile_options(udp_gateway PRIVATE /W4)
-    target_compile_options(udp-gateway-server PRIVATE /W4)
+    target_compile_options(rate_limiter_test PRIVATE /W4)
+    target_compile_options(types_test PRIVATE /W4)
+    target_compile_options(session_test PRIVATE /W4)
+    target_compile_options(gateway_test PRIVATE /W4)
 endif()
-
-# Install rules
-install(TARGETS udp_gateway udp-gateway-server
-    EXPORT udp-gateway-targets
-    RUNTIME DESTINATION bin
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib
-)
-
-install(DIRECTORY include/ DESTINATION include)
-
-# Add examples if enabled
-option(BUILD_EXAMPLES "Build examples" OFF)
-if(BUILD_EXAMPLES)
-    add_subdirectory(examples)
-endif()
-
-# Add tests if enabled
-option(BUILD_TESTING "Build tests" OFF)
-if(BUILD_TESTING)
-    enable_testing()
-    add_subdirectory(test)
-endif()
-
-# Export targets
-include(CMakePackageConfigHelpers)
-write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/udp-gateway-config-version.cmake"
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY SameMajorVersion
-)
-
-configure_file(cmake/udp-gateway-config.cmake
-    "${CMAKE_CURRENT_BINARY_DIR}/udp-gateway-config.cmake"
-    COPYONLY
-)
-
-install(EXPORT udp-gateway-targets
-    FILE udp-gateway-targets.cmake
-    NAMESPACE udp-gateway::
-    DESTINATION lib/cmake/udp-gateway
-)
-
-install(
-    FILES
-        "${CMAKE_CURRENT_BINARY_DIR}/udp-gateway-config.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/udp-gateway-config-version.cmake"
-    DESTINATION lib/cmake/udp-gateway
-)

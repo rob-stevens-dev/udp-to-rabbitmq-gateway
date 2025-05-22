@@ -1,3 +1,4 @@
+// components/udp-gateway/include/udp_gateway/rate_limiter.hpp
 #pragma once
 
 #include "udp_gateway/types.hpp"
@@ -8,6 +9,11 @@
 #include <unordered_map>
 
 namespace udp_gateway {
+
+// Forward declarations for test compatibility
+enum class MessagePriority;
+struct RateLimiterStatistics;
+struct TokenBucket;
 
 /**
  * @class IRateLimiter
@@ -95,7 +101,11 @@ public:
      * @param config Configuration for the rate limiter
      */
     explicit TokenBucketRateLimiter(const Config& config);
+    
+    // Custom destructor to handle PIMPL
+    ~TokenBucketRateLimiter();
 
+    // IRateLimiter interface
     bool checkLimit(const IMEI& deviceId, Priority priority) override;
     void recordMessage(const IMEI& deviceId, Priority priority, size_t size) override;
     void setDeviceLimit(const IMEI& deviceId, double messagesPerSecond, size_t burstSize) override;
@@ -103,7 +113,11 @@ public:
     void resetDevice(const IMEI& deviceId) override;
     std::unordered_map<std::string, double> getDeviceStatistics(const IMEI& deviceId) const override;
 
-private:
+    // Test interface methods (used by unit tests)
+    bool tryAcquire(const std::string& deviceId, int priority = 0);
+    RateLimiterStatistics getStatistics(const std::string& deviceId) const;
+
+protected:
     // Internal structure to track token bucket state for a device
     struct DeviceBucket {
         double tokensPerSecond;
@@ -120,9 +134,13 @@ private:
 
     // Convert priority to token consumption multiplier
     double getPriorityMultiplier(Priority priority) const;
+    
+    // Helper method for test interface
+    void refillTestBucket(TokenBucket& bucket, std::chrono::steady_clock::time_point now);
 
     Config config_;
     std::unordered_map<IMEI, DeviceBucket> deviceBuckets_;
+    std::unique_ptr<void, void(*)(void*)> testBuckets_;  // Use custom deleter
     mutable std::mutex mutex_;
 };
 
