@@ -1,0 +1,114 @@
+#pragma once
+
+#include "udp_gateway/types.hpp"
+#include <gmock/gmock.h>
+#include <vector>
+#include <string>
+
+// Mock interfaces for testing
+namespace protocol_parser {
+    class IProtocolParser {
+    public:
+        virtual ~IProtocolParser() = default;
+        virtual udp_gateway::Result<udp_gateway::DeviceMessage> parseMessage(
+            const std::vector<uint8_t>& data) = 0;
+        virtual std::vector<uint8_t> createAcknowledgment(
+            const udp_gateway::MessageAcknowledgment& ack) = 0;
+        virtual std::vector<uint8_t> createCommandPacket(
+            const std::vector<udp_gateway::DeviceCommand>& commands) = 0;
+    };
+
+    class MockProtocolParser : public IProtocolParser {
+    public:
+        MOCK_METHOD(udp_gateway::Result<udp_gateway::DeviceMessage>, parseMessage, 
+                   (const std::vector<uint8_t>& data), (override));
+        MOCK_METHOD(std::vector<uint8_t>, createAcknowledgment, 
+                   (const udp_gateway::MessageAcknowledgment& ack), (override));
+        MOCK_METHOD(std::vector<uint8_t>, createCommandPacket, 
+                   (const std::vector<udp_gateway::DeviceCommand>& commands), (override));
+    };
+}
+
+namespace redis_deduplication {
+    class IDeduplicationService {
+    public:
+        virtual ~IDeduplicationService() = default;
+        virtual bool isDuplicate(
+            const std::string& deviceId,
+            uint32_t sequenceNumber,
+            const std::string& messageId) = 0;
+        virtual void recordMessage(
+            const std::string& deviceId,
+            uint32_t sequenceNumber,
+            const std::string& messageId) = 0;
+    };
+
+    class MockDeduplicationService : public IDeduplicationService {
+    public:
+        MOCK_METHOD(bool, isDuplicate, 
+                   (const std::string& deviceId, uint32_t sequenceNumber, const std::string& messageId), 
+                   (override));
+        MOCK_METHOD(void, recordMessage, 
+                   (const std::string& deviceId, uint32_t sequenceNumber, const std::string& messageId), 
+                   (override));
+    };
+}
+
+namespace rabbitmq_integration {
+    class IMessagePublisher {
+    public:
+        virtual ~IMessagePublisher() = default;
+        virtual bool publishMessage(
+            const std::string& queueName,
+            const std::vector<uint8_t>& data) = 0;
+    };
+
+    class MockMessagePublisher : public IMessagePublisher {
+    public:
+        MOCK_METHOD(bool, publishMessage, 
+                   (const std::string& queueName, const std::vector<uint8_t>& data), 
+                   (override));
+    };
+}
+
+namespace device_manager {
+    class IDeviceManager {
+    public:
+        virtual ~IDeviceManager() = default;
+        virtual bool isAuthenticated(const udp_gateway::IMEI& deviceId) = 0;
+        virtual udp_gateway::DeviceState getDeviceState(const udp_gateway::IMEI& deviceId) = 0;
+        virtual void updateDeviceStatus(const udp_gateway::IMEI& deviceId, udp_gateway::DeviceState state) = 0;
+        virtual std::vector<udp_gateway::DeviceCommand> getPendingCommands(const udp_gateway::IMEI& deviceId) = 0;
+        virtual void markCommandDelivered(const std::string& commandId) = 0;
+    };
+
+    class MockDeviceManager : public IDeviceManager {
+    public:
+        MOCK_METHOD(bool, isAuthenticated, (const udp_gateway::IMEI& deviceId), (override));
+        MOCK_METHOD(udp_gateway::DeviceState, getDeviceState, (const udp_gateway::IMEI& deviceId), (override));
+        MOCK_METHOD(void, updateDeviceStatus, 
+                   (const udp_gateway::IMEI& deviceId, udp_gateway::DeviceState state), (override));
+        MOCK_METHOD(std::vector<udp_gateway::DeviceCommand>, getPendingCommands, 
+                   (const udp_gateway::IMEI& deviceId), (override));
+        MOCK_METHOD(void, markCommandDelivered, (const std::string& commandId), (override));
+    };
+}
+
+namespace monitoring_system {
+    class IMetricsCollector {
+    public:
+        virtual ~IMetricsCollector() = default;
+        virtual void incrementCounter(const std::string& name, uint64_t value = 1) = 0;
+        virtual void recordGauge(const std::string& name, double value) = 0;
+        virtual void recordHistogram(const std::string& name, double value) = 0;
+        virtual void recordError(const std::string& errorType) = 0;
+    };
+
+    class MockMetricsCollector : public IMetricsCollector {
+    public:
+        MOCK_METHOD(void, incrementCounter, (const std::string& name, uint64_t value), (override));
+        MOCK_METHOD(void, recordGauge, (const std::string& name, double value), (override));
+        MOCK_METHOD(void, recordHistogram, (const std::string& name, double value), (override));
+        MOCK_METHOD(void, recordError, (const std::string& errorType), (override));
+    };
+}
