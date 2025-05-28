@@ -1,0 +1,84 @@
+# components/rabbitmq-integration/config/testing.yaml
+connection:
+  host: ${RABBITMQ_HOST:-localhost}
+  port: ${RABBITMQ_PORT:-5672}
+  vhost: /test
+  username: ${RABBITMQ_USER:-guest}
+  password: ${RABBITMQ_PASS:-guest}
+  useTLS: false
+  connectionTimeout: 5
+  heartbeat: 15
+  maxRetries: 2
+  retryInterval: 500
+  enableLogging: false
+
+publisher:
+  confirmEnabled: true
+  persistentMessages: false
+  mandatoryDelivery: false
+  immediateDelivery: false
+  localQueueSize: 100
+  publishTimeout: 2000
+  batchSize: 5
+  batchTimeout: 50
+
+consumer:
+  prefetchCount: 5
+  autoAck: false
+  noLocal: false
+  exclusive: false
+  ackTimeout: 5000
+  consumerTimeout: 500
+
+localQueue:
+  maxSize: 100
+  maxMemoryBytes: 1048576  # 1MB
+  overflowStrategy: Block
+  enablePersistence: false
+  persistenceFile: /tmp/test-queue.dat
+  persistenceInterval: 5000
+  enableCompression: false
+  compressionLevel: 1
+
+monitoring:
+  enableMetrics: false
+  metricsPort: 0
+  metricsPath: /metrics
+  healthCheckPath: /health
+  enablePrometheus: false
+
+regional:
+  defaultRegion: test
+  regions:
+    test:
+      exchangePrefix: test
+      dataRetention: 5m
+      gdprCompliant: false
+
+exchanges:
+  telemetry:
+    name: test.telemetry.exchange
+    type: topic
+    durable: false
+    autoDelete: true
+  
+  command:
+    name: test.command.exchange
+    type: direct
+    durable: false
+    autoDelete: true
+
+queues:
+  defaultTTL: 300000  # 5 minutes
+  maxLength: 100
+  arguments:
+    x-queue-type: classic
+    x-max-length-bytes: 1048576
+    x-overflow: drop-head
+
+testing:
+  enableMockMode: true
+  mockLatency: 1  # ms
+  mockErrorRate: 0.01  # 1%
+  enableChaosMode: false
+  chaosInterval: 10000  # ms

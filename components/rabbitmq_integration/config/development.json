@@ -1,0 +1,90 @@
+# components/rabbitmq-integration/config/development.json
+{
+  "connection": {
+    "host": "localhost",
+    "port": 5672,
+    "vhost": "/dev",
+    "username": "guest",
+    "password": "guest",
+    "useTLS": false,
+    "connectionTimeout": 10,
+    "heartbeat": 30,
+    "maxRetries": 3,
+    "retryInterval": 1000,
+    "enableLogging": true
+  },
+  "publisher": {
+    "confirmEnabled": false,
+    "persistentMessages": false,
+    "mandatoryDelivery": false,
+    "immediateDelivery": false,
+    "localQueueSize": 1000,
+    "publishTimeout": 5000,
+    "batchSize": 10,
+    "batchTimeout": 100
+  },
+  "consumer": {
+    "prefetchCount": 10,
+    "autoAck": true,
+    "noLocal": false,
+    "exclusive": false,
+    "ackTimeout": 10000,
+    "consumerTimeout": 1000
+  },
+  "localQueue": {
+    "maxSize": 1000,
+    "maxMemoryBytes": 10485760,
+    "overflowStrategy": "DropOldest",
+    "enablePersistence": false,
+    "persistenceFile": "/tmp/rabbitmq-dev-queue.dat",
+    "persistenceInterval": 10000,
+    "enableCompression": false,
+    "compressionLevel": 1
+  },
+  "monitoring": {
+    "enableMetrics": true,
+    "metricsPort": 8080,
+    "metricsPath": "/metrics",
+    "healthCheckPath": "/health",
+    "enablePrometheus": false
+  },
+  "regional": {
+    "defaultRegion": "dev",
+    "regions": {
+      "dev": {
+        "exchangePrefix": "dev",
+        "dataRetention": "1h",
+        "gdprCompliant": false
+      }
+    }
+  },
+  "exchanges": {
+    "telemetry": {
+      "name": "dev.telemetry.exchange",
+      "type": "topic",
+      "durable": false,
+      "autoDelete": true
+    },
+    "command": {
+      "name": "dev.command.exchange",
+      "type": "direct", 
+      "durable": false,
+      "autoDelete": true
+    }
+  },
+  "queues": {
+    "defaultTTL": 3600000,
+    "maxLength": 1000,
+    "arguments": {
+      "x-queue-type": "classic",
+      "x-max-length-bytes": 10485760,
+      "x-overflow": "drop-head"
+    }
+  },
+  "debugging": {
+    "enableVerboseLogging": true,
+    "logLevel": "debug",
+    "enableMessageTrace": true,
+    "traceFile": "/tmp/rabbitmq-trace.log"
+  }
+}

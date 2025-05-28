@@ -1,0 +1,187 @@
+#pragma once
+
+#include <string>
+#include <memory>
+#include <atomic>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <chrono>
+#include <functional>
+#include <map>
+#include <amqp.h>
+#include <amqp_tcp_socket.h>
+
+namespace rabbitmq_integration {
+
+// Forward declaration
+class Channel;
+
+/**
+ * @brief Connection statistics
+ */
+
+/**
+ * @brief Connection configuration
+ */
+
+/**
+ * @brief AMQP Connection wrapper
+ * 
+ * Provides a high-level interface to the RabbitMQ AMQP connection,
+ * including automatic reconnection, connection pooling, and error handling.
+ */
+class Connection {
+public:
+    explicit Connection(const ConnectionConfig& config);
+    ~Connection();
+    
+    // Non-copyable, but movable
+    Connection(const Connection&) = delete;
+    Connection& operator=(const Connection&) = delete;
+    Connection(Connection&& other) noexcept;
+    Connection& operator=(Connection&& other) noexcept;
+    
+    // Connection management
+    bool open();
+    void close();
+    bool isConnected() const;
+    bool ping();
+    
+    // Channel management
+    std::shared_ptr<Channel> createChannel();
+    std::shared_ptr<Channel> createChannel(uint16_t channelId);
+    void closeChannel(uint16_t channelId);
+    
+    // Statistics
+    ConnectionStats getStats() const;
+    void resetStats();
+    
+    // Configuration
+    const ConnectionConfig& getConfig() const;
+    
+    // Native handle access (for advanced usage)
+    amqp_connection_state_t getNativeHandle();
+    const amqp_connection_state_t getNativeHandle() const;
+
+private:
+    ConnectionConfig config_;
+    amqp_connection_state_t connection_;
+    amqp_socket_t* socket_;
+    
+    std::atomic<bool> connected_;
+    std::atomic<bool> shouldReconnect_;
+    std::atomic<uint16_t> nextChannelId_;
+    
+    mutable std::mutex connectionMutex_;
+    mutable std::mutex channelsMutex_;
+    mutable std::mutex statsMutex_;
+    
+    std::thread reconnectThread_;
+    std::condition_variable reconnectCondition_;
+    
+    std::map<uint16_t, std::weak_ptr<Channel>> channels_;
+    ConnectionStats stats_;
+    
+    // Helper methods
+    bool establishConnection();
+    bool authenticateConnection();
+    void setupHeartbeat();
+    void closeAllChannels();
+    void reconnectLoop();
+    
+    // Statistics helpers
+    template<typename Func>
+    void updateStats(Func&& func);
+    
+    // Error handling
+    bool handleAmqpResponse(amqp_rpc_reply_t reply, const std::string& operation);
+    
+    // Statistics helpers
+    template<typename Func>
+    void updateStats(Func&& func);
+    
+    // Error handling
+    friend class Channel;
+};
+
+/**
+ * @brief AMQP Channel wrapper
+ * 
+ * Represents an AMQP channel for communication with RabbitMQ.
+ * Channels are multiplexed over a single connection.
+ */
+class Channel {
+public:
+    explicit Channel(Connection& connection, uint16_t channelId);
+    ~Channel();
+    
+    // Non-copyable and non-movable
+    Channel(const Channel&) = delete;
+    Channel& operator=(const Channel&) = delete;
+    Channel(Channel&&) = delete;
+    Channel& operator=(Channel&&) = delete;
+    
+    // Channel management
+    bool open();
+    void close();
+    bool isOpen() const;
+    uint16_t getChannelId() const;
+    
+    // Exchange operations
+    bool declareExchange(const std::string& name, 
+                        const std::string& type,
+                        bool durable = true,
+                        bool autoDelete = false,
+                        const std::map<std::string, std::string>& arguments = {});
+    
+    bool deleteExchange(const std::string& name, bool ifUnused = false);
+    
+    // Queue operations
+    bool declareQueue(const std::string& name,
+                     bool durable = true,
+                     bool exclusive = false,
+                     bool autoDelete = false,
+                     const std::map<std::string, std::string>& arguments = {});
+    
+    bool deleteQueue(const std::string& name, bool ifUnused = false, bool ifEmpty = false);
+    uint32_t purgeQueue(const std::string& name);
+    
+    // Binding operations
+    bool bindQueue(const std::string& queue,
+                  const std::string& exchange,
+                  const std::string& routingKey,
+                  const std::map<std::string, std::string>& arguments = {});
+    
+    bool unbindQueue(const std::string& queue,
+                    const std::string& exchange,
+                    const std::string& routingKey,
+                    const std::map<std::string, std::string>& arguments = {});
+    
+    // Transaction support
+    bool txSelect();
+    bool txCommit();
+    bool txRollback();
+    
+    // Publisher confirms
+    bool confirmSelect();
+    
+    // Flow control
+    bool flow(bool active);
+
+private:
+    Connection& connection_;
+    uint16_t channelId_;
+    std::atomic<bool> open_;
+    mutable std::mutex channelMutex_;
+    
+    // Helper methods
+    bool openChannel();
+    amqp_table_t buildAmqpTable(const std::map<std::string, std::string>& args);
+    void freeAmqpTable(amqp_table_t& table);
+    bool handleAmqpResponse(amqp_rpc_reply_t reply, const std::string& operation);
+    
+    friend class Connection;
+};
+
+} // namespace rabbitmq_integration

@@ -1,0 +1,316 @@
+# Multi-stage Dockerfile for RabbitMQ Integration Component
+# Uses distroless image for minimal attack surface and size
+
+# Build stage
+FROM debian:bullseye-slim AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    ninja-build \
+    git \
+    pkg-config \
+    libssl-dev \
+    zlib1g-dev \
+    librabbitmq-dev \
+    libboost-all-dev \
+    nlohmann-json3-dev \
+    libspdlog-dev \
+    libfmt-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /build
+
+# Copy source code
+COPY . .
+
+# Create build directory
+RUN mkdir -p build
+
+# Configure with CMake
+WORKDIR /build/build
+RUN cmake .. \
+    -GNinja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr/local \
+    -DBUILD_SHARED_LIBS=ON \
+    -DENABLE_TESTING=OFF \
+    -DBUILD_EXAMPLES=OFF \
+    -DBUILD_BENCHMARKS=OFF \
+    -DBUILD_DOCUMENTATION=OFF
+
+# Build the library
+RUN ninja
+
+# Install to staging area
+RUN DESTDIR=/staging ninja install
+
+# Runtime stage - using distroless
+FROM gcr.io/distroless/cc-debian11:latest AS runtime
+
+# Copy library and dependencies from builder
+COPY --from=builder /staging/usr/local/lib/lib*.so* /usr/local/lib/
+COPY --from=builder /staging/usr/local/include/ /usr/local/include/
+
+# Copy system libraries needed at runtime
+COPY --from=builder /usr/lib/x86_64-linux-gnu/librabbitmq.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libboost_system.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libboost_thread.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libboost_filesystem.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libssl.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libcrypto.so* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /lib/x86_64-linux-gnu/libz.so* /lib/x86_64-linux-gnu/
+
+# Set library path
+ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu
+
+# Alternative: Debian slim runtime stage (if distroless doesn't work)
+FROM debian:bullseye-slim AS runtime-slim
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    librabbitmq4 \
+    libboost-system1.74.0 \
+    libboost-thread1.74.0 \
+    libboost-filesystem1.74.0 \
+    libssl1.1 \
+    zlib1g \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy built library from builder
+COPY --from=builder /staging/usr/local/lib/lib*.so* /usr/local/lib/
+COPY --from=builder /staging/usr/local/include/ /usr/local/include/
+
+# Set library path
+ENV LD_LIBRARY_PATH=/usr/local/lib
+
+# Create non-root user for security
+RUN groupadd -r rabbitmq && useradd -r -g rabbitmq rabbitmq
+
+# Switch to non-root user
+USER rabbitmq
+
+# Development stage (for debugging and development)
+FROM debian:bullseye-slim AS development
+
+# Install all development tools
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    ninja-build \
+    git \
+    pkg-config \
+    gdb \
+    valgrind \
+    clang-tools \
+    cppcheck \
+    doxygen \
+    graphviz \
+    libssl-dev \
+    zlib1g-dev \
+    librabbitmq-dev \
+    libboost-all-dev \
+    nlohmann-json3-dev \
+    libspdlog-dev \
+    libfmt-dev \
+    libgtest-dev \
+    libbenchmark-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install additional development tools
+RUN apt-get update && apt-get install -y \
+    vim \
+    nano \
+    curl \
+    wget \
+    htop \
+    tree \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /workspace
+
+# Copy source code
+COPY . .
+
+# Create development user
+RUN groupadd -r dev && useradd -r -g dev -m -s /bin/bash dev \
+    && chown -R dev:dev /workspace
+
+# Switch to development user
+USER dev
+
+# Set environment variables for development
+ENV CC=gcc
+ENV CXX=g++
+ENV CMAKE_BUILD_TYPE=Debug
+ENV ENABLE_TESTING=ON
+ENV BUILD_EXAMPLES=ON
+
+# Example stage (for running examples)
+FROM runtime-slim AS examples
+
+# Copy examples from builder
+COPY --from=builder /build/build/example/ /usr/local/bin/examples/
+
+# Copy example configuration files
+COPY examples/config/ /etc/rabbitmq-integration/
+
+# Set working directory
+WORKDIR /usr/local/bin/examples
+
+# Testing stage
+FROM development AS testing
+
+# Build and run tests
+RUN mkdir -p build && cd build \
+    && cmake .. \
+        -GNinja \
+        -DCMAKE_BUILD_TYPE=Debug \
+        -DENABLE_TESTING=ON \
+        -DBUILD_EXAMPLES=ON \
+        -DENABLE_SANITIZERS=ON \
+    && ninja \
+    && ctest --output-on-failure
+
+# Benchmark stage
+FROM development AS benchmark
+
+# Install additional benchmark dependencies
+USER root
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-matplotlib \
+    python3-numpy \
+    && pip3 install --no-cache-dir \
+        pandas \
+        seaborn \
+    && rm -rf /var/lib/apt/lists/*
+
+USER dev
+
+# Build benchmarks
+RUN mkdir -p build && cd build \
+    && cmake .. \
+        -GNinja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_BENCHMARKS=ON \
+    && ninja
+
+# Set entrypoint for benchmarks
+WORKDIR /workspace/build
+CMD ["./benchmark/rabbitmq_integration_benchmark"]
+
+# Documentation stage
+FROM development AS documentation
+
+# Build documentation
+RUN mkdir -p build && cd build \
+    && cmake .. \
+        -GNinja \
+        -DBUILD_DOCUMENTATION=ON \
+    && ninja rabbitmq-integration-docs
+
+# Copy documentation to web-accessible location
+FROM nginx:alpine AS docs-server
+COPY --from=documentation /workspace/build/docs/html/ /usr/share/nginx/html/
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+
+# Multi-architecture support
+FROM --platform=$BUILDPLATFORM debian:bullseye-slim AS cross-builder
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+
+# Install cross-compilation tools based on target platform
+RUN case ${TARGETPLATFORM} in \
+        "linux/amd64") \
+            apt-get update && apt-get install -y \
+                build-essential \
+                cmake \
+                ninja-build \
+            ;; \
+        "linux/arm64") \
+            apt-get update && apt-get install -y \
+                gcc-aarch64-linux-gnu \
+                g++-aarch64-linux-gnu \
+                cmake \
+                ninja-build \
+            && export CC=aarch64-linux-gnu-gcc \
+            && export CXX=aarch64-linux-gnu-g++ \
+            ;; \
+        "linux/arm/v7") \
+            apt-get update && apt-get install -y \
+                gcc-arm-linux-gnueabihf \
+                g++-arm-linux-gnueabihf \
+                cmake \
+                ninja-build \
+            && export CC=arm-linux-gnueabihf-gcc \
+            && export CXX=arm-linux-gnueabihf-g++ \
+            ;; \
+    esac
+
+# Production-ready stage with health checks
+FROM runtime-slim AS production
+
+# Add health check script
+COPY --from=builder /build/scripts/health-check.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/health-check.sh
+
+# Add configuration validation script
+COPY --from=builder /build/scripts/validate-config.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/validate-config.sh
+
+# Create directories for logs and data
+RUN mkdir -p /var/log/rabbitmq-integration \
+    && mkdir -p /var/lib/rabbitmq-integration \
+    && chown -R rabbitmq:rabbitmq /var/log/rabbitmq-integration \
+    && chown -R rabbitmq:rabbitmq /var/lib/rabbitmq-integration
+
+# Add configuration files
+COPY config/production.conf /etc/rabbitmq-integration/
+COPY config/logging.conf /etc/rabbitmq-integration/
+
+# Set environment variables
+ENV RABBITMQ_INTEGRATION_CONFIG_FILE=/etc/rabbitmq-integration/production.conf
+ENV RABBITMQ_INTEGRATION_LOG_LEVEL=INFO
+ENV RABBITMQ_INTEGRATION_LOG_FILE=/var/log/rabbitmq-integration/rabbitmq-integration.log
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD /usr/local/bin/health-check.sh
+
+# Expose metrics port (if applicable)
+EXPOSE 8080
+
+# Switch to non-root user
+USER rabbitmq
+
+# Set working directory
+WORKDIR /var/lib/rabbitmq-integration
+
+# Default command (should be overridden by application)
+CMD ["/usr/local/bin/examples/publisher_example"]
+
+# Build arguments for customization
+ARG BUILD_VERSION=unknown
+ARG BUILD_DATE=unknown
+ARG GIT_COMMIT=unknown
+
+# Add metadata labels
+LABEL maintainer="UDP-RabbitMQ Gateway Project <dev@example.com>" \
+      version="${BUILD_VERSION}" \
+      build-date="${BUILD_DATE}" \
+      git-commit="${GIT_COMMIT}" \
+      description="High-performance RabbitMQ integration library" \
+      org.opencontainers.image.title="rabbitmq-integration" \
+      org.opencontainers.image.description="High-performance RabbitMQ integration library" \
+      org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.source="https://github.com/your-org/udp-rabbitmq-gateway" \
+      org.opencontainers.image.licenses="MIT"
