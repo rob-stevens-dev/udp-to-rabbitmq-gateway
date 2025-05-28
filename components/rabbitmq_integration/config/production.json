@@ -1,0 +1,99 @@
+# components/rabbitmq-integration/config/production.json
+{
+  "connection": {
+    "host": "rabbitmq-cluster.production.local",
+    "port": 5672,
+    "vhost": "/telemetry",
+    "username": "telemetry_user",
+    "password": "${RABBITMQ_PASSWORD}",
+    "useTLS": true,
+    "connectionTimeout": 30,
+    "heartbeat": 60,
+    "maxRetries": 5,
+    "retryInterval": 2000,
+    "enableLogging": true
+  },
+  "publisher": {
+    "confirmEnabled": true,
+    "persistentMessages": true,
+    "mandatoryDelivery": false,
+    "immediateDelivery": false,
+    "localQueueSize": 50000,
+    "publishTimeout": 10000,
+    "batchSize": 100,
+    "batchTimeout": 200
+  },
+  "consumer": {
+    "prefetchCount": 50,
+    "autoAck": false,
+    "noLocal": false,
+    "exclusive": false,
+    "ackTimeout": 30000,
+    "consumerTimeout": 5000
+  },
+  "localQueue": {
+    "maxSize": 100000,
+    "maxMemoryBytes": 268435456,
+    "overflowStrategy": "DropOldest",
+    "enablePersistence": true,
+    "persistenceFile": "/var/lib/rabbitmq-integration/local-queue.dat",
+    "persistenceInterval": 30000,
+    "enableCompression": true,
+    "compressionLevel": 6
+  },
+  "monitoring": {
+    "enableMetrics": true,
+    "metricsPort": 8080,
+    "metricsPath": "/metrics",
+    "healthCheckPath": "/health",
+    "enablePrometheus": true
+  },
+  "regional": {
+    "defaultRegion": "us-east-1",
+    "regions": {
+      "us-east-1": {
+        "exchangePrefix": "na-east",
+        "dataRetention": "7d",
+        "gdprCompliant": false
+      },
+      "us-west-1": {
+        "exchangePrefix": "na-west", 
+        "dataRetention": "7d",
+        "gdprCompliant": false
+      },
+      "eu-central-1": {
+        "exchangePrefix": "eu-central",
+        "dataRetention": "30d",
+        "gdprCompliant": true
+      },
+      "ap-southeast-1": {
+        "exchangePrefix": "ap-se",
+        "dataRetention": "7d", 
+        "gdprCompliant": false
+      }
+    }
+  },
+  "exchanges": {
+    "telemetry": {
+      "name": "telemetry.exchange",
+      "type": "topic",
+      "durable": true,
+      "autoDelete": false
+    },
+    "command": {
+      "name": "command.exchange", 
+      "type": "direct",
+      "durable": true,
+      "autoDelete": false
+    }
+  },
+  "queues": {
+    "defaultTTL": 86400000,
+    "maxLength": 1000000,
+    "arguments": {
+      "x-queue-type": "quorum",
+      "x-max-length-bytes": 1073741824,
+      "x-overflow": "reject-publish"
+    }
+  }
+}

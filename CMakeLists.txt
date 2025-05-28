@@ -1,176 +1,159 @@
 cmake_minimum_required(VERSION 3.16)
-project(udp_rabbitmq_gateway VERSION 0.1.0 LANGUAGES CXX)
+project(rabbitmq-integration VERSION 0.1.0 LANGUAGES CXX)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Set default build type if not specified
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type" FORCE)
-endif()
-
 # Build options
-option(BUILD_SHARED_LIBS "Build shared libraries" ON)
-option(ENABLE_TESTING "Enable testing" ON)
-option(ENABLE_EXAMPLES "Build examples" ON)
-option(ENABLE_SANITIZERS "Enable sanitizers (Address, Thread, etc.)" OFF)
-option(ENABLE_CODE_COVERAGE "Enable code coverage" OFF)
-option(ENABLE_STATIC_ANALYSIS "Run static analysis during build" OFF)
-option(ENABLE_DOCUMENTATION "Build documentation" OFF)
+option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+option(BUILD_TESTING "Build tests" ON)
+option(BUILD_EXAMPLES "Build examples" ON)
+option(BUILD_BENCHMARKS "Build benchmarks" OFF)
+option(BUILD_DOCUMENTATION "Build documentation" OFF)
+option(ENABLE_COMPRESSION "Enable compression support" OFF)
+option(ENABLE_SSL_TLS "Enable SSL/TLS support" OFF)
 
-# Component options
-option(ENABLE_COMPONENT_UDP_GATEWAY "Enable UDP Gateway component" ON)
-option(ENABLE_COMPONENT_PROTOCOL_PARSER "Enable Protocol Parser component" ON)
-option(ENABLE_COMPONENT_REDIS_DEDUPLICATION "Enable Redis Deduplication component" ON)
-option(ENABLE_COMPONENT_RABBITMQ_INTEGRATION "Enable RabbitMQ Integration component" ON)
-option(ENABLE_COMPONENT_DEVICE_MANAGER "Enable Device Manager component" ON)
-option(ENABLE_COMPONENT_REGIONAL_ROUTER "Enable Regional Router component" ON)
-option(ENABLE_COMPONENT_MONITORING_SYSTEM "Enable Monitoring System component" ON)
-option(ENABLE_COMPONENT_DEBUG_TOOLS "Enable Debug Tools component" ON)
+# Find required dependencies
+find_package(PkgConfig REQUIRED)
 
-# Add a compilation database for tools like clang-tidy
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# RabbitMQ C client
+pkg_check_modules(RABBITMQ_C REQUIRED librabbitmq>=0.11.0)
 
-# Include custom CMake modules
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+# JSON library
+find_package(nlohmann_json REQUIRED)
 
-# Find common dependencies
-find_package(Boost REQUIRED)
-find_package(nlohmann_json CONFIG QUIET)
+# Boost
+find_package(Boost REQUIRED COMPONENTS system thread filesystem)
 
-# If nlohmann_json wasn't found through CONFIG mode, try to find it another way
-if(NOT nlohmann_json_FOUND)
-    # Check if the single-header version exists
-    if(EXISTS "/usr/include/nlohmann/json.hpp")
-        add_library(nlohmann_json INTERFACE)
-        target_include_directories(nlohmann_json INTERFACE /usr/include)
-        add_library(nlohmann_json::nlohmann_json ALIAS nlohmann_json)
-        set(nlohmann_json_FOUND TRUE)
-    else()
-        message(FATAL_ERROR "nlohmann/json library not found")
-    endif()
+# Threading
+find_package(Threads REQUIRED)
+
+# UUID (for message IDs)
+pkg_check_modules(UUID REQUIRED uuid)
+
+# spdlog (but try to avoid fmt dependency issues)
+find_package(spdlog REQUIRED)
+
+# Build type
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# Export compile commands for tooling
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# Display configuration
+message(STATUS "RabbitMQ Integration Configuration:")
+message(STATUS "  Version: ${PROJECT_VERSION}")
+message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "  C++ standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "  RabbitMQ C client: ${RABBITMQ_C_VERSION}")
+message(STATUS "  Boost version: ${Boost_VERSION}")
+message(STATUS "  Build shared libs: ${BUILD_SHARED_LIBS}")
+message(STATUS "  Build testing: ${BUILD_TESTING}")
+message(STATUS "  Build examples: ${BUILD_EXAMPLES}")
+message(STATUS "  Build benchmarks: ${BUILD_BENCHMARKS}")
+message(STATUS "  Build documentation: ${BUILD_DOCUMENTATION}")
+message(STATUS "  Compression support: ${ENABLE_COMPRESSION}")
+message(STATUS "  SSL/TLS support: ${ENABLE_SSL_TLS}")
 
-# Setup testing if enabled
-if(ENABLE_TESTING)
-    enable_testing()
-    include(CTest)
-endif()
-
-# Setup sanitizers if enabled
-if(ENABLE_SANITIZERS)
-    include(Sanitizers)
-    add_sanitizers()
-endif()
-
-# Setup code coverage if enabled
-if(ENABLE_CODE_COVERAGE)
-    include(CodeCoverage)
-    setup_code_coverage()
-endif()
-
-# Setup static analysis if enabled
-if(ENABLE_STATIC_ANALYSIS)
-    include(StaticAnalysis)
-    setup_static_analysis()
-endif()
-
-# Setup documentation if enabled
-if(ENABLE_DOCUMENTATION)
-    include(Documentation)
-    setup_documentation()
-endif()
-
-# Add components
-if(ENABLE_COMPONENT_PROTOCOL_PARSER)
-    add_subdirectory(components/protocol_parser)
-endif()
-
-if(ENABLE_COMPONENT_UDP_GATEWAY)
-    add_subdirectory(components/udp_gateway)
-endif()
-
-if(ENABLE_COMPONENT_REDIS_DEDUPLICATION)
-    # add_subdirectory(components/redis_deduplication)
-    message(STATUS "Redis Deduplication component not implemented yet")
-endif()
-
-if(ENABLE_COMPONENT_RABBITMQ_INTEGRATION)
-    # add_subdirectory(components/rabbitmq_integration)
-    message(STATUS "RabbitMQ Integration component not implemented yet")
-endif()
-
-if(ENABLE_COMPONENT_DEVICE_MANAGER)
-    # add_subdirectory(components/device_manager)
-    message(STATUS "Device Manager component not implemented yet")
-endif()
-
-if(ENABLE_COMPONENT_REGIONAL_ROUTER)
-    # add_subdirectory(components/regional_router)
-    message(STATUS "Regional Router component not implemented yet")
-endif()
-
-if(ENABLE_COMPONENT_MONITORING_SYSTEM)
-    # add_subdirectory(components/monitoring_system)
-    message(STATUS "Monitoring System component not implemented yet")
-endif()
-
-if(ENABLE_COMPONENT_DEBUG_TOOLS)
-    # add_subdirectory(components/debug_tools)
-    message(STATUS "Debug Tools component not implemented yet")
-endif()
-
-# Create a target to build all components
-add_custom_target(build_all ALL
-    COMMENT "Building all components"
+# Add the main library
+add_library(rabbitmq-integration
+    src/connection.cpp
+    src/consumer.cpp
+    src/publisher.cpp
+    src/queue_manager.cpp
+    src/message.cpp
+    src/types.cpp
+    src/local_queue.cpp
 )
 
-# Create a target to build all tests
-if(ENABLE_TESTING)
-    add_custom_target(build_tests
-        COMMENT "Building all tests"
-    )
+# Set include directories
+target_include_directories(rabbitmq-integration
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${RABBITMQ_C_INCLUDE_DIRS}
+        ${UUID_INCLUDE_DIRS}
+)
+
+# Link libraries
+target_link_libraries(rabbitmq-integration
+    PUBLIC
+        nlohmann_json::nlohmann_json
+        Boost::system
+        Boost::thread
+        Boost::filesystem
+        Threads::Threads
+    PRIVATE
+        ${RABBITMQ_C_LIBRARIES}
+        ${UUID_LIBRARIES}
+        spdlog::spdlog
+)
+
+# Set compile options
+target_compile_options(rabbitmq-integration
+    PRIVATE
+        ${RABBITMQ_C_CFLAGS_OTHER}
+        ${UUID_CFLAGS_OTHER}
+        -Wall
+        -Wextra
+        -Wpedantic
+        $<$<CONFIG:Debug>:-g -O0>
+        $<$<CONFIG:Release>:-O3 -DNDEBUG>
+)
+
+# Set properties
+set_target_properties(rabbitmq-integration PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION 0
+    CXX_STANDARD ${CMAKE_CXX_STANDARD}
+    CXX_STANDARD_REQUIRED ON
+    POSITION_INDEPENDENT_CODE ON
+)
+
+# Enable testing
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(test)
 endif()
 
-# Create a target to build all examples
-if(ENABLE_EXAMPLES)
-    add_custom_target(build_examples
-        COMMENT "Building all examples"
-    )
+# Add examples
+if(BUILD_EXAMPLES)
+    add_subdirectory(example)
 endif()
 
-# Create a target to run all tests with verbose output
-if(ENABLE_TESTING)
-    add_custom_target(check
-        COMMAND ${CMAKE_CTEST_COMMAND} --verbose
-        COMMENT "Running all tests with verbose output"
-    )
-endif()
+# Installation
+install(TARGETS rabbitmq-integration
+    EXPORT rabbitmq-integration-targets
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin
+    INCLUDES DESTINATION include
+)
 
-# Print build configuration summary
-message(STATUS "Build configuration:")
-message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "  C++ compiler: ${CMAKE_CXX_COMPILER}")
-message(STATUS "  C++ standard: C++${CMAKE_CXX_STANDARD}")
-message(STATUS "  Build shared libraries: ${BUILD_SHARED_LIBS}")
-message(STATUS "  Enable testing: ${ENABLE_TESTING}")
-message(STATUS "  Enable examples: ${ENABLE_EXAMPLES}")
-message(STATUS "  Enable sanitizers: ${ENABLE_SANITIZERS}")
-message(STATUS "  Enable code coverage: ${ENABLE_CODE_COVERAGE}")
-message(STATUS "  Enable static analysis: ${ENABLE_STATIC_ANALYSIS}")
-message(STATUS "  Enable documentation: ${ENABLE_DOCUMENTATION}")
-message(STATUS "")
-message(STATUS "Components:")
-message(STATUS "  UDP Gateway: ${ENABLE_COMPONENT_UDP_GATEWAY}")
-message(STATUS "  Protocol Parser: ${ENABLE_COMPONENT_PROTOCOL_PARSER}")
-message(STATUS "  Redis Deduplication: ${ENABLE_COMPONENT_REDIS_DEDUPLICATION}")
-message(STATUS "  RabbitMQ Integration: ${ENABLE_COMPONENT_RABBITMQ_INTEGRATION}")
-message(STATUS "  Device Manager: ${ENABLE_COMPONENT_DEVICE_MANAGER}")
-message(STATUS "  Regional Router: ${ENABLE_COMPONENT_REGIONAL_ROUTER}")
-message(STATUS "  Monitoring System: ${ENABLE_COMPONENT_MONITORING_SYSTEM}")
-message(STATUS "  Debug Tools: ${ENABLE_COMPONENT_DEBUG_TOOLS}")
+install(DIRECTORY include/
+    DESTINATION include
+    FILES_MATCHING PATTERN "*.hpp"
+)
+
+install(EXPORT rabbitmq-integration-targets
+    FILE rabbitmq-integration-targets.cmake
+    NAMESPACE rabbitmq-integration::
+    DESTINATION lib/cmake/rabbitmq-integration
+)
+
+# Create package config
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+    rabbitmq-integration-config-version.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/rabbitmq-integration-config.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/rabbitmq-integration-config.cmake
+    INSTALL_DESTINATION lib/cmake/rabbitmq-integration
+)
